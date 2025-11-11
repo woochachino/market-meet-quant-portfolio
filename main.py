@@ -93,9 +93,27 @@ def score_data(valid_tickers):
         return blended.rename("Benchmark")
     
 
+    def get_sector_safe(ticker):
+        try:
+            info = yf.Ticker(ticker).get_info()  # more reliable than .info on newer yfinance
+        except Exception:
+            info = {}
+        sector = (
+            info.get("sector")
+            or info.get("industry")
+            or info.get("categoryName")
+            or "Unknown"
+        )
+        return sector
+    
     valid_stocks_with_data = []
     bench = blended_benchmark(start, end)
 
+
+    bench_vol_ann = float(bench.std() * np.sqrt(252))
+    if bench_vol_ann == 0 or np.isnan(bench_vol_ann):
+        bench_vol_ann = np.nan
+    
 
     for i in valid_tickers:
         stock_ret = yf.download(i, start=start, end=end)["Close"].pct_change().dropna()
@@ -104,6 +122,9 @@ def score_data(valid_tickers):
         if len(df) < 5:
             continue
 
+        var_bench = df["Benchmark"].var()
+        if var_bench == 0 or np.isnan(var_bench):
+            continue
         # Beta Calculation
         beta = df[i].cov(df["Benchmark"]) / df["Benchmark"].var()
 
@@ -111,9 +132,18 @@ def score_data(valid_tickers):
         if var_bench == 0 or np.isnan(var_bench):
             continue
 
+        # Correlation Calculation
         corr = df[i].corr(df["Benchmark"])
 
-        valid_stocks_with_data.append([i, {'Beta': float(np.round(beta, 5)), 'Correlation': float(np.round(corr, 5))}])
+        # Volatility Calculation
+        vol_ann = float(stock_ret.std() * np.sqrt(252))
+        raw_ratio = vol_ann / bench_vol_ann if bench_vol_ann and not np.isnan(bench_vol_ann) else np.nan
+        sigma_rel = float(raw_ratio / (1 + raw_ratio)) if raw_ratio and not np.isnan(raw_ratio) else np.nan
+
+        sector = get_sector_safe(i)
+
+
+        valid_stocks_with_data.append([i, {'Beta': float(np.round(beta, 5)), 'Correlation': float(np.round(corr, 5)), 'Volatility_Ann': float(np.round(vol_ann, 5)), 'Sigma_Rel': float(np.round(sigma_rel, 5)), 'Sector': sector}])
         
     return valid_stocks_with_data
 
