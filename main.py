@@ -79,7 +79,7 @@ def score_data(valid_tickers):
 
 
     bench_vol_ann = float(bench.std() * np.sqrt(252))
-    if bench_vol_ann == 0 or np.isnan(bench_vol_ann):
+    if not np.isfinite(bench_vol_ann) or bench_vol_ann <= 0:
         bench_vol_ann = np.nan
     
 
@@ -106,8 +106,8 @@ def score_data(valid_tickers):
 
         # Volatility Calculation
         vol_ann = float(stock_ret.std() * np.sqrt(252))
-        raw_ratio = vol_ann / bench_vol_ann if bench_vol_ann and not np.isnan(bench_vol_ann) else np.nan
-        sigma_rel = float(raw_ratio / (1 + raw_ratio)) if raw_ratio and not np.isnan(raw_ratio) else np.nan
+        raw_ratio = (vol_ann / bench_vol_ann) if np.isfinite(bench_vol_ann) else np.nan
+        sigma_rel = float(raw_ratio / (1 + raw_ratio)) if np.isfinite(raw_ratio) else np.nan
 
         sector = get_sector_safe(i)
 
@@ -116,6 +116,31 @@ def score_data(valid_tickers):
         
     return valid_stocks_with_data
 
+
+def score_calculate(valid_tickers):
+    x = score_data(valid_tickers)
+    final = []
+    total_weight = 0.0
+    for ticker, m in x:
+        beta = m['Beta']
+        corr = m['Correlation']
+        sigma_rel = m['Sigma_Rel']
+        score = 0.5 * (1 - abs(beta - 1)) + 0.3 * (1 - sigma_rel) + 0.2 * corr
+
+        if not np.isfinite(score):
+            continue
+        score = max(score, 0.0)
+
+        weight = score
+        total_weight += weight
+
+        final.append([ticker, float(np.round(score, 5)), weight, m['Sector']])
+
+    for i in final:
+        weight_in_percent = (i[2] / total_weight) * 100 if total_weight != 0 else 0.0
+        i.append(float(np.round(weight_in_percent, 5)))
+    
+    return final
 
 '''def beta_filtration(valid_tickers):
     x = score_calculate(valid_tickers)
@@ -171,7 +196,7 @@ def main():
     tickers_list = read_csv("Tickers.csv")
     valid, invalid = check_ticker(tickers_list)
 
-    x = score_data(valid)
+    x = score_calculate(valid)
 
     print("Valid:", valid)
     print()
