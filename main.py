@@ -95,7 +95,7 @@ def score_data(valid_tickers):
         if var_bench == 0 or np.isnan(var_bench):
             continue
         # Beta Calculation
-        beta = df[i].cov(df["Benchmark"]) / df["Benchmark"].var()
+        beta = df[i].cov(d])f["Benchmark" / df["Benchmark"].var()
 
         var_bench = df["Benchmark"].var()
         if var_bench == 0 or np.isnan(var_bench):
