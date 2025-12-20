@@ -1,3 +1,9 @@
+## About
+
+This repository contains **Team 13’s submission** to the **FM 101 annual team competition** at the **University of Waterloo**.  
+The project placed **1st overall**, achieving a **3.2% portfolio return over one week** during a **3.6% benchmark return period**.
+
+
 # Market Meet — Quantitative Portfolio Construction
 
 A benchmark-relative quantitative portfolio construction system built in Python.
