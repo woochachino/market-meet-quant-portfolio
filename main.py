@@ -1,3 +1,14 @@
+from IPython.display import display, Math, Latex
+
+import argparse
+import pandas as pd
+import numpy as np
+import numpy_financial as npf
+import yfinance as yf
+import matplotlib.pyplot as plt
+import random
+from datetime import datetime
+
 # Obtain latest USD to CAD conversion rate
 fx = yf.download("USDCAD=X", period="5d")["Close"].dropna()
 CAD_PER_USD = float(fx.iloc[-1])
@@ -14,7 +25,7 @@ def read_csv(filename):
 # trading volume, and market listing. It returns two lists: valid_tickers and invalid_tickers
 # Function that checks every ticker to determine if it is valid or invalid 
 # It returns two lists: valid_tickers and invalid_tickers   
-def check_ticker(list):
+def check_ticker(list, start="2024-10-01", end="2025-09-30"):
     valid_tickers=[]
     invalid_tickers=[]
     start = "2024-10-01"
@@ -113,9 +124,7 @@ print("Annualized Benchmark Volatility: ", round(volatility*100, 3), "%", sep=''
 
 
 # Function that takes a list of valid tickers + sets time range
-def score_data(valid_tickers):
-    start="2025-05-15"
-    end="2025-11-15"
+def score_data(valid_tickers, start="2025-05-15", end="2025-11-15", window=30):
 
 # Retrieves the sector from yfinance 
     def get_sector_safe(ticker):
@@ -495,7 +504,9 @@ This is because future functions will naturally adjust them to a proper weightin
 """
 
 # Gathers all the computed metrics and converts them into a score
-def score_calculate(valid_tickers):
+def score_calculate(valid_tickers, start="2025-05-15", end="2025-11-15",
+                    defensive_ratio=0.05, max_position=15.0, max_sector=40.0,
+                    max_size=25, min_size=10):
     x = score_data(valid_tickers) # This contains the Beta, Correlation, Volatility, and stock's Sector
     final = {} # Stores scores 
     total_weight = 0.0 # Accumulates all the raw scores 
@@ -544,10 +555,10 @@ def score_calculate(valid_tickers):
 # We run every stock through ALL the helper functions that were made previously
     final = filter_out_low_weight_stocks(final)
     final = market_cap_filtering(final, x)
-    final = add_defensive_layer(final, x, defensive_ratio=0.05)
-    final = limit_portfolio_size(final, max_size=25, min_size=10)
+    final = add_defensive_layer(final, x, defensive_ratio=defensive_ratio)
+    final = limit_portfolio_size(final, max_size=max_size, min_size=min_size)
     final = enforce_min_weight(final)
-    final = apply_risk_constraints(final, max_position=15.0, max_sector=40.0)
+    final = apply_risk_constraints(final, max_position=max_position, max_sector=max_sector)
     final = rebalance_currency_mix(final)
 
     return final
@@ -620,13 +631,16 @@ def create_portfolio_dataframe(final_portfolio, total_value_cad=1000000):
 
 # We take the final portfolio, and only save the ticker and the number of Shares to buy into a CSV file
 
-def save_stocks_csv(portfolio_df, group_number, directory="."):
+def save_stocks_csv(portfolio_df, directory="."):
     """Save Ticker and Shares to CSV"""
-    stocks_df = portfolio_df[['Ticker', 'Shares']].copy() # Extracting only tickers and shares
-    filename = f"{directory}/Stocks_Group_{group_number:02d}.csv" # Make file name
-    stocks_df.to_csv(filename, index=False) # Save csv
-    print(f"\nStocks CSV saved to: {filename}")
-    return filename
+    portfolio_df.to_csv("portfolio_full.csv", index=False)
+
+    # Simplified orders file
+    portfolio_df[["Ticker", "Shares"]].to_csv("orders.csv", index=False)
+
+    print("\nSaved files:")
+    print(" - portfolio_full.csv")
+    print(" - orders.csv")
 
 # This finds the actual transaction fees based on fee rules
 
@@ -645,39 +659,78 @@ def calculate_actual_fees(portfolio_df):
 # Reads the tickers, filters them, scores them, builds a risk-balanced portfolio, 
 # calculates fees, adjusts final weights, generates share counts, outputs the final portfolio, and saves a CSV 
 def main():
-    tickers_list = read_csv("Tickers.csv")
-    valid, invalid = check_ticker(tickers_list)
+    parser = argparse.ArgumentParser(description="Market Meet portfolio builder")
+    parser.add_argument("--tickers", type=str, default="Tickers.csv",
+                        help="Path to CSV containing one ticker per line")
+    parser.add_argument("--start", type=str, default="2025-05-15",
+                        help="Start date for scoring window (YYYY-MM-DD)")
+    parser.add_argument("--end", type=str, default="2025-11-15",
+                        help="End date for scoring window (YYYY-MM-DD)")
+    parser.add_argument("--validate-start", type=str, default="2024-10-01",
+                        help="Start date for ticker validation window (YYYY-MM-DD)")
+    parser.add_argument("--validate-end", type=str, default="2025-09-30",
+                        help="End date for ticker validation window (YYYY-MM-DD)")
+    parser.add_argument("--portfolio-cad", type=float, default=1_000_000,
+                        help="Total portfolio value in CAD")
 
-    final_portfolio = score_calculate(valid)
+    parser.add_argument("--outdir", type=str, default=".",
+                        help="Output directory for generated CSVs")
 
 
-    # Account for fees - calculate actual transaction fees
-    TOTAL_PORTFOLIO_VALUE = 1000000  # $1M CAD
+    parser.add_argument("--max-position", type=float, default=15.0,
+                        help="Max weight per position (%)")
+    parser.add_argument("--max-sector", type=float, default=40.0,
+                        help="Max sector weight (%)")
+    parser.add_argument("--max-holdings", type=int, default=25,
+                        help="Maximum number of holdings")
+    parser.add_argument("--min-holdings", type=int, default=10,
+                        help="Minimum number of holdings")
+    parser.add_argument("--defensive-ratio", type=float, default=0.05,
+                        help="Defensive layer allocation (0.05 = 5%%)")
 
-    # First pass: estimate fees with initial portfolio
+    args = parser.parse_args()
+
+    tickers_list = read_csv(args.tickers)
+
+    # pass validation dates into ticker check
+    valid, invalid = check_ticker(tickers_list, start=args.validate_start, end=args.validate_end)
+
+    # scoring uses args.start/args.end
+    final_portfolio = score_calculate(
+        valid,
+        start=args.start,
+        end=args.end,
+        defensive_ratio=args.defensive_ratio,
+        max_position=args.max_position,
+        max_sector=args.max_sector,
+        max_size=args.max_holdings,
+        min_size=args.min_holdings
+    )
+
+    # Fees + final share allocation
+    TOTAL_PORTFOLIO_VALUE = float(args.portfolio_cad)
+
     temp_portfolio_df = create_portfolio_dataframe(final_portfolio, TOTAL_PORTFOLIO_VALUE)
     actual_fees = calculate_actual_fees(temp_portfolio_df)
     available_to_invest = TOTAL_PORTFOLIO_VALUE - actual_fees
 
-    # Create final portfolio DataFrame with correct investment amount
     portfolio_df = create_portfolio_dataframe(final_portfolio, available_to_invest)
-    
-    # Display Portfolio_Final DataFrame
-    print("PORTFOLIO_FINAL")
-    print()
+
+    print("\nPORTFOLIO_FINAL\n")
     print(portfolio_df)
-    
-    # Calculate actual totals
+
+    save_stocks_csv(portfolio_df)
+
+
     total_value = portfolio_df['Value'].sum()
     total_weight = portfolio_df['Weight'].sum()
 
-    save_stocks_csv(portfolio_df, 13)
-    
     print(f"\nTotal Portfolio Value: ${total_value:,.2f} CAD")
     print(f"Total Weight: {total_weight:.1f}%")
     print(f"Transaction Fees: ${actual_fees:,.2f} CAD")
     print(f"Cash Reserve (fees): ${TOTAL_PORTFOLIO_VALUE - total_value:,.2f} CAD")
     print(f"Portfolio + Cash: ${total_value + (TOTAL_PORTFOLIO_VALUE - total_value):,.2f} CAD")
-    print()
+
+
 if __name__ == "__main__":
     main()
