@@ -84,9 +84,8 @@ Weights are normalized after each step to ensure full investment.
 ├── main.py
 ├── notebooks/
 │   └── market_meet_report.ipynb
-├── data/
-│   └── Tickers.csv.example
 ├── requirements.txt
+├── Tickers.csv
 └── README.md
 ```
 
@@ -130,10 +129,9 @@ python main.py \
 
 ## Outputs
 
-- `Portfolio.csv` — full portfolio with prices, weights, and share counts
-- `portfolio_orders.csv` — simplified order list (ticker and shares)
+- `portfolio_full.csv` — full portfolio with prices, weights, and share counts
+- `orders.csv` — simplified order list (ticker and shares)
 
-All outputs are saved to the specified output directory.
 
 
 ---

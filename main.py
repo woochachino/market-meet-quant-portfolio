@@ -28,8 +28,6 @@ def read_csv(filename):
 def check_ticker(list, start="2024-10-01", end="2025-09-30"):
     valid_tickers=[]
     invalid_tickers=[]
-    start = "2024-10-01"
-    end="2025-09-30"
     # Retrieve S&P 500 history (used to validate data availability)
     market = yf.Ticker("^GSPC")
     market_data = market.history(start=start, end=end, interval="1d")
@@ -151,10 +149,6 @@ def score_data(valid_tickers, start="2025-05-15", end="2025-11-15", window=30):
     bench_vol_ann = float(bench.std() * np.sqrt(252))
     if bench_vol_ann <= 0 or not np.isfinite(bench_vol_ann):
         bench_vol_ann = bench.std() * np.sqrt(252) # If the value is invalid, it's replaced with np.nan
-   
-    # Sets the number of days in the rolling window (as we have a rolling beta and rolling correlation)
-    # to make getting recent data easier
-    window = 30
 
 
     # Looping through all valid tickers and extracting daily returns
@@ -507,7 +501,7 @@ This is because future functions will naturally adjust them to a proper weightin
 def score_calculate(valid_tickers, start="2025-05-15", end="2025-11-15",
                     defensive_ratio=0.05, max_position=15.0, max_sector=40.0,
                     max_size=25, min_size=10):
-    x = score_data(valid_tickers) # This contains the Beta, Correlation, Volatility, and stock's Sector
+    x = score_data(valid_tickers, start=start, end=end) # This contains the Beta, Correlation, Volatility, and stock's Sector
     final = {} # Stores scores 
     total_weight = 0.0 # Accumulates all the raw scores 
 
