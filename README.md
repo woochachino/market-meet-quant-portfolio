@@ -10,7 +10,7 @@ A benchmark-relative quantitative portfolio construction system built in Python.
 
 This project implements a **systematic, rules-based equity portfolio pipeline** that selects, scores, and allocates stocks based on their risk characteristics relative to a blended market benchmark. The focus is on **risk control, diversification, and evaluation discipline**, rather than short-term alpha prediction.
 
-The system was originally developed in a team setting and has since been refactored into a **configurable, standalone portfolio builder**.
+The full approach and decision-making process can be found in the Jupyter Notebook file at notebooks/market_meet_portfolio.ipynb
 
 
 ---
